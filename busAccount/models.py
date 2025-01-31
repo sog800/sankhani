@@ -49,3 +49,15 @@ class Token(models.Model):
 
     def is_refresh_expired(self):
         return now() > self.refresh_expires_at
+
+from django.contrib.auth import get_user_model
+# Using get_user_model() to handle custom user models
+User = get_user_model()
+
+class Feedback(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    feedback = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Delete Account Feedback from {self.user.username} on {self.created_at}"

@@ -18,6 +18,10 @@ from django.contrib.auth import authenticate
 from .models import Token
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED, HTTP_500_INTERNAL_SERVER_ERROR
+from products.models import Product, LandingPage
+from busAccount.models import Feedback
+
 # Business profile views
 
 @csrf_exempt
@@ -61,15 +65,50 @@ def edit_profile(request):
 
 # token handling view and login and log out and register
 
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.views import APIView
+from django.contrib.auth import get_user_model  # Import the custom user model dynamically
+from .serializers import RegisterSerializer
+
+User = get_user_model()  # Get the custom user model
+
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.views import APIView
+from django.contrib.auth import get_user_model
+from .serializers import RegisterSerializer
+
+User = get_user_model()  # Get the custom user model
+
 class RegisterView(APIView):
     def post(self, request):
+        email = request.data.get("email")
+        username = request.data.get("username")  # Renamed 'user' to 'username' for clarity
+
+        # Check if username already exists
+        if User.objects.filter(username=username).exists():
+            return Response(
+                {"error": "This username is already in use. Please choose another one or add a number."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if email already exists
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {"error": "This email is already in use. Please use a different email."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response({'message': 'User created successfully!'}, status=status.HTTP_201_CREATED)
+            return Response(
+                {"message": "User created successfully!"},
+                status=status.HTTP_201_CREATED
+            )
+        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
 
 class LogoutView(APIView):
     def post(self, request):
@@ -117,32 +156,55 @@ class RefreshAccessTokenView(APIView):
 
 # log in
 
-
 class LoginView(APIView):
     def post(self, request):
-        # Get credentials from the request
         username = request.data.get("username")
         password = request.data.get("password")
+
+        # Validate input
+        if not username or not password:
+            return Response({"error": "Username and password are required."}, status=HTTP_400_BAD_REQUEST)
 
         # Authenticate the user
         user = authenticate(username=username, password=password)
         if not user:
-            return Response({"error": "Invalid credentials"}, status=401)
+            return Response({"error": "Invalid credentials."}, status=HTTP_401_UNAUTHORIZED)
 
-        # Generate tokens
-        refresh = RefreshToken.for_user(user)
-        access = refresh.access_token
+        try:
+            # Generate tokens
+            refresh = RefreshToken.for_user(user)
+            access = refresh.access_token
 
-        # Save tokens in the database
-        Token.objects.create(
-            user=user,
-            access_token=str(access),
-            refresh_token=str(refresh),
-            access_expires_at=now() + timedelta(minutes=5),  # Access token expires in 15 minutes
-            refresh_expires_at=now() + timedelta(days=7),     # Refresh token expires in 7 days
-        )
+            # Save tokens in the database
+            Token.objects.create(
+                user=user,
+                access_token=str(access),
+                refresh_token=str(refresh),
+                access_expires_at=now() + timedelta(minutes=15),  # Access token expires in 15 minutes
+                refresh_expires_at=now() + timedelta(days=7),  # Refresh token expires in 7 days
+            )
 
-        # Return only the access token
-        return Response({
-            "access": str(access),
-        }, status=200)
+            return Response({"access": str(access)}, status=200)
+
+        except Exception as e:
+            return Response({"error": "Something went wrong on the server. Please try again later."}, status=HTTP_500_INTERNAL_SERVER_ERROR)
+
+class DeleteAccountView(APIView):
+    permission_classes = [IsAuthenticated]  # Ensure the user is authenticated
+
+    def delete(self, request, *args, **kwargs):
+        user = request.user
+        feedback = request.data.get('feedback', '')
+
+        # Store the feedback in the Feedback model (before deleting the user and data)
+        if feedback:
+            Feedback.objects.create(user=user, feedback=feedback)
+
+        # Delete the user's associated posts, landing pages, etc.
+        Product.objects.filter(user=user).delete()
+        LandingPage.objects.filter(user=user).delete()
+
+        # Finally, delete the user account
+        user.delete()
+
+        return JsonResponse({'message': 'Account and associated data deleted successfully'}, status=200)

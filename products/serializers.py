@@ -15,6 +15,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "district",
             "professional",
             "category",
+            "average_rating"
         ]
         read_only_fields = ["email", "user"]
 
