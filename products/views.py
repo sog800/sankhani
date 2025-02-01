@@ -4,6 +4,7 @@ from .serializers import ProductSerializer, ProductRatingSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response 
 from rest_framework.permissions import IsAuthenticated
+from .utils.imageCompresor import optimize_image
 
 
 #  product crude api view
@@ -14,7 +15,21 @@ class ProductListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user, email=self.request.user.email)
+        # Get the current user details
+        user = self.request.user
+
+        # Check if an image was uploaded with the request
+        product_picture = self.request.FILES.get('product_picture')
+        if product_picture:
+            # Optimize the image before saving
+            optimized_image = optimize_image(product_picture)
+            serializer.save(
+                user=user, 
+                email=user.email, 
+                product_picture=optimized_image
+            )
+        else:
+            serializer.save(user=user, email=user.email)
 
 
 class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
