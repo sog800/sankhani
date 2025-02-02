@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .views import keep_alive
 
 urlpatterns = [
     path('search/', views.SearchProductView.as_view(), name='search-products'),
@@ -10,4 +11,5 @@ urlpatterns = [
     path("<int:pk>/", views.ProductDetailView.as_view(), name="product-detail"),
     path("filter/", views.ProductFilteredView.as_view(), name="product-filter"),
     path('user-products/', views.UserProductListView.as_view(), name='user-product-list'),
+    path("keep-alive/", keep_alive, name="keep_alive"),
 ]

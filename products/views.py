@@ -158,3 +158,8 @@ class ProductRatingView(APIView):
             "detail": "Rating submitted successfully.",
             "average_rating": product.average_rating  # Send updated average rating
         }, status=status.HTTP_201_CREATED)
+
+from django.http import JsonResponse
+
+def keep_alive(request):
+    return JsonResponse({"status": "alive"})
