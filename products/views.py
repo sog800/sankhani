@@ -82,12 +82,19 @@ class ProductListView(APIView):
     pagination_class = ProductPagination()
 
     def get(self, request):
-        products = Product.objects.all()
+        products = Product.objects.all()  # Fetch all products
         paginator = self.pagination_class()
         paginated_products = paginator.paginate_queryset(products, request)
-        serializer = ProductSerializer(paginated_products, many=True)
-        return paginator.get_paginated_response(serializer.data)
-
+        
+        # Ensure pagination works correctly
+        if paginated_products is not None:
+            serializer = ProductSerializer(paginated_products, many=True)
+            return paginator.get_paginated_response(serializer.data)
+        
+        # In case of no pagination
+        serializer = ProductSerializer(products, many=True)
+        return Response(serializer.data)
+    
 # search engine
 from django.db.models import Q
 class SearchProductView(APIView):
