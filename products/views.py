@@ -113,17 +113,21 @@ class ProductFilteredView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 # search engine
+from django.db.models import Q
 class SearchProductView(APIView):
     def get(self, request):
-        query = request.GET.get('q', '')  # Get search query from request
+        query = request.GET.get('q', '').strip()  # Get search query from request and remove extra spaces
+
         if query:
-            products = Product.objects.filter(title__icontains=query)  # Use 'title' instead of 'name'
+            # Filter products where title or category contains the query (case-insensitive)
+            products = Product.objects.filter(
+                Q(title__icontains=query) | Q(category__icontains=query)
+            )
         else:
             products = Product.objects.all()
 
         serializer = ProductSerializer(products, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
 
 # product rating
 
