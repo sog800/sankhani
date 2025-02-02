@@ -141,7 +141,7 @@ class RefreshAccessTokenView(APIView):
 
             # Update the access token in the database
             token_entry.access_token = str(new_access)
-            token_entry.access_expires_at = now() + timedelta(minutes=5)
+            token_entry.access_expires_at = now() + timedelta(minutes=15)
             token_entry.save()
             
             # Return the new access token

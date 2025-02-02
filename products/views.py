@@ -9,27 +9,51 @@ from .utils.imageCompresor import optimize_image
 
 #  product crude api view
 
+from django.core.cache import cache
+from rest_framework.pagination import PageNumberPagination
+from rest_framework import generics, permissions
+from .models import Product
+from .serializers import ProductSerializer
+
+# Custom pagination class (limits products per page)
+class ProductPagination(PageNumberPagination):
+    page_size = 20  # Load 20 products per page
+    page_size_query_param = 'page_size'
+    max_page_size = 100  # Prevent too many items at once
+
 class ProductListCreateView(generics.ListCreateAPIView):
-    queryset = Product.objects.all()
     serializer_class = ProductSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    pagination_class = ProductPagination  # Apply pagination
+
+    def get_queryset(self):
+        """
+        Fetch products efficiently and apply caching.
+        """
+        cache_key = "all_products"  # Unique key for caching
+        products = cache.get(cache_key)  # Try to get data from cache
+
+        if not products:
+            products = Product.objects.select_related('user').only(
+                'id', 'name', 'category', 'price', 'product_picture', 'user__username'
+            ).all()  # Fetch only necessary fields
+
+            cache.set(cache_key, products, timeout=60 * 5)  # Cache for 5 minutes
+
+        return products
 
     def perform_create(self, serializer):
-        # Get the current user details
         user = self.request.user
-
-        # Check if an image was uploaded with the request
         product_picture = self.request.FILES.get('product_picture')
+
         if product_picture:
-            # Optimize the image before saving
             optimized_image = optimize_image(product_picture)
-            serializer.save(
-                user=user, 
-                email=user.email, 
-                product_picture=optimized_image
-            )
+            serializer.save(user=user, email=user.email, product_picture=optimized_image)
         else:
             serializer.save(user=user, email=user.email)
+
+        # Clear cache after adding a new product
+        cache.delete("all_products")
 
 
 class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
