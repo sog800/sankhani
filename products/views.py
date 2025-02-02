@@ -78,7 +78,15 @@ class ProductFilteredView(APIView):
         return Response({"detail": "No matching products found."}, status=status.HTTP_404_NOT_FOUND)
 
 
+class ProductListView(APIView):
+    pagination_class = ProductPagination()
 
+    def get(self, request):
+        products = Product.objects.all()
+        paginator = self.pagination_class()
+        paginated_products = paginator.paginate_queryset(products, request)
+        serializer = ProductSerializer(paginated_products, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
 # search engine
 from django.db.models import Q
