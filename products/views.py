@@ -15,46 +15,16 @@ from rest_framework import generics, permissions
 from .models import Product
 from .serializers import ProductSerializer
 
-# Custom pagination class (limits products per page)
-class ProductPagination(PageNumberPagination):
-    page_size = 20  # Load 20 products per page
-    page_size_query_param = 'page_size'
-    max_page_size = 100  # Prevent too many items at once
 
-class ProductListCreateView(generics.ListCreateAPIView):
-    serializer_class = ProductSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    pagination_class = ProductPagination  # Apply pagination
+class ProductCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]  # Only logged-in users can create
 
-    def get_queryset(self):
-        """
-        Fetch products efficiently and apply caching.
-        """
-        cache_key = "all_products"  # Unique key for caching
-        products = cache.get(cache_key)  # Try to get data from cache
-
-        if not products:
-            products = Product.objects.select_related('user').only(
-                'id', 'name', 'category', 'price', 'product_picture', 'user__username'
-            ).all()  # Fetch only necessary fields
-
-            cache.set(cache_key, products, timeout=60 * 5)  # Cache for 5 minutes
-
-        return products
-
-    def perform_create(self, serializer):
-        user = self.request.user
-        product_picture = self.request.FILES.get('product_picture')
-
-        if product_picture:
-            optimized_image = optimize_image(product_picture)
-            serializer.save(user=user, email=user.email, product_picture=optimized_image)
-        else:
-            serializer.save(user=user, email=user.email)
-
-        # Clear cache after adding a new product
-        cache.delete("all_products")
-
+    def post(self, request):
+        serializer = ProductSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(owner=request.user)  # Assign product to the logged-in user
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Product.objects.all()
@@ -78,40 +48,38 @@ class UserProductListView(generics.ListAPIView):
 
 
 
-
+class ProductPagination(PageNumberPagination):
+    page_size = 20  # Default: 20 products per page
+    page_size_query_param = "page_size"  # Allow frontend to request custom page size
+    max_page_size = 100  # Limit maximum page size
+    
 class ProductFilteredView(APIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get(self, request):
-        # Retrieve query parameters
-        district = request.query_params.get("district")
-        category = request.query_params.get("category")
-
-        # Build filters dynamically
         filters = {}
-        if district:
-            filters["district__iexact"] = district  # Case-insensitive filter
-        if category:
-            filters["category__iexact"] = category  # Case-insensitive filter
 
-        # Fetch products with or without filters
-        products = Product.objects.filter(**filters)
+        # Dynamic filtering based on query params
+        for key, value in request.query_params.items():
+            if key in [field.name for field in Product._meta.get_fields()]:
+                filters[f"{key}__iexact"] = value  # Case-insensitive filtering
 
-        # Return response
-        if products.exists():
-            serializer = ProductSerializer(products, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        else:
-            # Friendly message if no products match the filters
-            message = (
-                "No products found."
-                if not district and not category
-                else f"No products found for district '{district}' and category '{category}'."
-            )
-            return Response(
-                {"detail": message},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        # Filter products
+        products = Product.objects.filter(**filters).order_by("-id")  # Newest products first
+
+        # Apply pagination
+        paginator = ProductPagination()
+        paginated_products = paginator.paginate_queryset(products, request, view=self)
+
+        if paginated_products is not None:
+            serializer = ProductSerializer(paginated_products, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        return Response({"detail": "No matching products found."}, status=status.HTTP_404_NOT_FOUND)
+
+
+
+
 # search engine
 from django.db.models import Q
 class SearchProductView(APIView):
@@ -158,8 +126,3 @@ class ProductRatingView(APIView):
             "detail": "Rating submitted successfully.",
             "average_rating": product.average_rating  # Send updated average rating
         }, status=status.HTTP_201_CREATED)
-
-from django.http import JsonResponse
-
-def keep_alive(request):
-    return JsonResponse({"status": "alive"})
