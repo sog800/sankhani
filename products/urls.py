@@ -11,5 +11,5 @@ urlpatterns = [
     path("filter/", views.ProductFilteredView.as_view(), name="product-filter"),
     path('user-products/', views.UserProductListView.as_view(), name='user-product-list'),
     path("keep-alive/", views.keep_alive, name="keep_alive"),
-    path('list-all', views.ProductListView.as_view(), name='list-products')
+    path('list-all/', views.ProductListView.as_view(), name='list-products'),
 ]
