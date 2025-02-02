@@ -208,3 +208,7 @@ class DeleteAccountView(APIView):
         user.delete()
 
         return JsonResponse({'message': 'Account and associated data deleted successfully'}, status=200)
+
+
+def keep_alive(request):
+    return JsonResponse({"status": "alive"})
