@@ -52,7 +52,7 @@ class ProductPagination(PageNumberPagination):
     page_size = 20  # Default: 20 products per page
     page_size_query_param = "page_size"  # Allow frontend to request custom page size
     max_page_size = 100  # Limit maximum page size
-    
+
 class ProductFilteredView(APIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
@@ -126,3 +126,10 @@ class ProductRatingView(APIView):
             "detail": "Rating submitted successfully.",
             "average_rating": product.average_rating  # Send updated average rating
         }, status=status.HTTP_201_CREATED)
+
+
+
+from django.http import JsonResponse
+
+def keep_alive(request):
+    return JsonResponse({"status": "alive"})
