@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Product, ProductRating
+from landingPage.models import LandingPage
 
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
@@ -7,7 +8,7 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "user",
-            'landing_page',
+            "landing_page",
             "email",
             "title",
             "product_description",
@@ -15,15 +16,29 @@ class ProductSerializer(serializers.ModelSerializer):
             "district",
             "professional",
             "category",
-            "average_rating"
+            "average_rating",
         ]
-        read_only_fields = ["email", "user"]
+        read_only_fields = ["email", "user", "landing_page"]  # User & landing_page should not be provided in request
 
     def create(self, validated_data):
-        user = self.context["request"].user
+        """Ensure user and email are set correctly when creating a product."""
+        request = self.context.get("request")
+
+        if not request or not request.user.is_authenticated:
+            raise serializers.ValidationError({"error": "User authentication failed."})
+
+        user = request.user
+        landing_page = LandingPage.objects.filter(user=user).first()
+
+        if not landing_page:
+            raise serializers.ValidationError({"error": "User must have a landing page before creating a product."})
+
         validated_data["user"] = user
         validated_data["email"] = user.email
+        validated_data["landing_page"] = landing_page
+
         return super().create(validated_data)
+
 
 # product rating
 
