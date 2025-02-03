@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .utils.imageCompresor import optimize_image
 from landingPage.models import LandingPage
+import traceback
 
 #  product crude api view
 
@@ -20,26 +21,39 @@ class ProductCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]  # Only logged-in users can create
 
     def post(self, request):
-        # Ensure the user has a landing page
-        landing_page = LandingPage.objects.filter(user=request.user).first()
-        if not landing_page:
+        try:
+            # Ensure user is authenticated
+            user = request.user
+            if not user or not user.is_authenticated:
+                return Response({"error": "User authentication failed."}, status=status.HTTP_401_UNAUTHORIZED)
+
+            # Ensure the user has a landing page
+            landing_page = LandingPage.objects.filter(user=user).first()
+            if not landing_page:
+                return Response(
+                    {"error": "User must have a landing page before creating a product."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Prepare data
+            data = request.data.copy()
+            data["user"] = user.id  # Associate product with the logged-in user
+
+            # Validate and save product
+            serializer = ProductSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save(user=user, landing_page=landing_page)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+            # Handle validation errors
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            error_details = traceback.format_exc()  # Get detailed error trace
             return Response(
-                {"error": "User must have a landing page before creating a product."},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Internal Server Error", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-        # Prepare data
-        data = request.data.copy()
-        data["user"] = request.user.id  # Associate product with the logged-in user
-
-        # Validate and save product
-        serializer = ProductSerializer(data=data)
-        if serializer.is_valid():
-            serializer.save(user=request.user, landing_page=landing_page)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        # Handle validation errors
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
