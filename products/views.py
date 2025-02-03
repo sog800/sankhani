@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response 
 from rest_framework.permissions import IsAuthenticated
 from .utils.imageCompresor import optimize_image
-
+from landingPage.models import LandingPage
 
 #  product crude api view
 
@@ -20,11 +20,28 @@ class ProductCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]  # Only logged-in users can create
 
     def post(self, request):
-        serializer = ProductSerializer(data=request.data)
+        # Ensure the user has a landing page
+        landing_page = LandingPage.objects.filter(user=request.user).first()
+        if not landing_page:
+            return Response(
+                {"error": "User must have a landing page before creating a product."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Prepare data
+        data = request.data.copy()
+        data["user"] = request.user.id  # Associate product with the logged-in user
+
+        # Validate and save product
+        serializer = ProductSerializer(data=data)
         if serializer.is_valid():
-            serializer.save(owner=request.user)  # Assign product to the logged-in user
+            serializer.save(user=request.user, landing_page=landing_page)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        # Handle validation errors
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 
 class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Product.objects.all()
@@ -45,7 +62,6 @@ class UserProductListView(generics.ListAPIView):
         This view should return a list of products for the currently authenticated user.
         """
         return Product.objects.filter(user=self.request.user)
-
 
 
 class ProductPagination(PageNumberPagination):
@@ -112,7 +128,7 @@ class SearchProductView(APIView):
 
         serializer = ProductSerializer(products, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-        
+
 
 # product rating
 
