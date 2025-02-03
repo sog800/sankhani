@@ -163,6 +163,7 @@ class LoginView(APIView):
 
         # Validate input
         if not username or not password:
+            print('no such user')
             return Response({"error": "Username and password are required."}, status=HTTP_400_BAD_REQUEST)
 
         # Authenticate the user

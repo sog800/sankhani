@@ -1,59 +1,37 @@
 from rest_framework import generics, permissions,status, permissions
 from .models import Product,ProductRating
-from .serializers import ProductSerializer, ProductRatingSerializer
+from .serializers import ProductSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response 
 from rest_framework.permissions import IsAuthenticated
 from .utils.imageCompresor import optimize_image
-from landingPage.models import LandingPage
-import traceback
-
-#  product crude api view
-
-from django.core.cache import cache
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import generics, permissions
 from .models import Product
 from .serializers import ProductSerializer
 
 
-class ProductCreateView(APIView):
-    permission_classes = [permissions.IsAuthenticated]  # Only logged-in users can create
+class ProductCreateView(generics.ListCreateAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
-    def post(self, request):
-        try:
-            # Ensure user is authenticated
-            user = request.user
-            if not user or not user.is_authenticated:
-                return Response({"error": "User authentication failed."}, status=status.HTTP_401_UNAUTHORIZED)
+    def perform_create(self, serializer):
+        # Get the current user details
+        user = self.request.user
 
-            # Ensure the user has a landing page
-            landing_page = LandingPage.objects.filter(user=user).first()
-            if not landing_page:
-                return Response(
-                    {"error": "User must have a landing page before creating a product."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Prepare data
-            data = request.data.copy()
-            data["user"] = user.id  # Associate product with the logged-in user
-
-            # Validate and save product
-            serializer = ProductSerializer(data=data)
-            if serializer.is_valid():
-                serializer.save(user=user, landing_page=landing_page)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-            # Handle validation errors
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        except Exception as e:
-            error_details = traceback.format_exc()  # Get detailed error trace
-            return Response(
-                {"error": "Internal Server Error", "details": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        # Check if an image was uploaded with the request
+        product_picture = self.request.FILES.get('product_picture')
+        if product_picture:
+            # Optimize the image before saving
+            optimized_image = optimize_image(product_picture)
+            serializer.save(
+                user=user, 
+                email=user.email, 
+                product_picture=optimized_image
             )
+        else:
+            serializer.save(user=user, email=user.email)
 
 
 
