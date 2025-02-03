@@ -53,22 +53,22 @@ class ProductPagination(PageNumberPagination):
     page_size_query_param = "page_size"  # Allow frontend to request custom page size
     max_page_size = 100  # Limit maximum page size
 
+
 class ProductFilteredView(APIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    pagination_class = ProductPagination
+    product_fields = {field.name for field in Product._meta.get_fields()}  # Cached for efficiency
 
     def get(self, request):
         filters = {}
 
-        # Dynamic filtering based on query params
         for key, value in request.query_params.items():
-            if key in [field.name for field in Product._meta.get_fields()]:
+            if key in self.product_fields:
                 filters[f"{key}__iexact"] = value  # Case-insensitive filtering
 
-        # Filter products
-        products = Product.objects.filter(**filters).order_by("-id")  # Newest products first
+        products = Product.objects.filter(**filters).order_by("-id")
 
-        # Apply pagination
-        paginator = ProductPagination()
+        paginator = self.pagination_class()
         paginated_products = paginator.paginate_queryset(products, request, view=self)
 
         if paginated_products is not None:
@@ -79,7 +79,7 @@ class ProductFilteredView(APIView):
 
 
 class ProductListView(APIView):
-    pagination_class = ProductPagination()
+    pagination_class = ProductPagination
 
     def get(self, request):
         products = Product.objects.all()  # Fetch all products
@@ -95,6 +95,7 @@ class ProductListView(APIView):
         serializer = ProductSerializer(products, many=True)
         return Response(serializer.data)
     
+
 # search engine
 from django.db.models import Q
 class SearchProductView(APIView):
@@ -111,6 +112,7 @@ class SearchProductView(APIView):
 
         serializer = ProductSerializer(products, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+        
 
 # product rating
 
