@@ -188,7 +188,15 @@ class LoginView(APIView):
                 refresh_expires_at=now() + timedelta(days=7),  # Refresh token expires in 7 days
             )
 
-            return Response({"access": str(access)}, status=200)
+            return Response(
+                {
+                    "access": str(access),
+                    "refresh": str(refresh),
+                    "username": user.username,
+                    "email": user.email,
+                },
+                status=200
+            )
 
         except Exception as e:
             return Response({"error": "Something went wrong on the server. Please try again later."}, status=HTTP_500_INTERNAL_SERVER_ERROR)
