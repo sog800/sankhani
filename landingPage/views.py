@@ -7,34 +7,53 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated,AllowAny
 from .serializers import LandingPageSerializer, LandingPageLinkSerializer
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, viewsets
 from products.serializers import  ProductSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .serializers import LandingPageSerializer
+from products.utils.imageCompresor import optimize_image
 
 @csrf_exempt
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def create_or_update_landing_page(request):
     if request.method == "POST":
-        # Check if the user already has a landing page
+        user = request.user
+
+        # Check if images were uploaded
+        business_image = request.FILES.get('business_image')
+        background_image = request.FILES.get('background_image')
+
+        # Optimize images if present
+        optimized_business_image = optimize_image(business_image) if business_image else None
+        optimized_background_image = optimize_image(background_image) if background_image else None
+
         try:
-            landing_page = LandingPage.objects.get(user=request.user)
-            # If found, update the landing page
+            # Check if the user already has a landing page
+            landing_page = LandingPage.objects.get(user=user)
             serializer = LandingPageSerializer(landing_page, data=request.data, partial=True)
+            
             if serializer.is_valid():
-                serializer.save()
+                serializer.save(
+                    business_image=optimized_business_image or landing_page.business_image,
+                    background_image=optimized_background_image or landing_page.background_image
+                )
                 return JsonResponse(
                     {"message": "Landing page updated", "id": landing_page.id}, 
                     status=200
                 )
             return JsonResponse({"error": serializer.errors}, status=400)
+
         except LandingPage.DoesNotExist:
             # If no landing page exists, create a new one
             serializer = LandingPageSerializer(data=request.data)
             if serializer.is_valid():
-                landing_page = serializer.save(user=request.user)  # Associate with the current user
+                landing_page = serializer.save(
+                    user=user, 
+                    business_image=optimized_business_image,
+                    background_image=optimized_background_image
+                )
                 return JsonResponse(
                     {"message": "Landing page created", "id": landing_page.id}, 
                     status=201
@@ -42,6 +61,7 @@ def create_or_update_landing_page(request):
             return JsonResponse({"error": serializer.errors}, status=400)
 
     return JsonResponse({"error": "Invalid request method"}, status=405)
+
 
 
 class LandingPageDetailView(APIView):
@@ -127,3 +147,83 @@ def get_landing_page_id_by_email(request):
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ViewSet for handling feedback API
+from rest_framework import generics, permissions, serializers
+from rest_framework.response import Response
+from django.conf import settings
+from django.shortcuts import get_object_or_404
+from .models import Feedback
+from .serializers import FeedbackSerializer
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+
+
+class ListFeedbackView(generics.ListAPIView):
+    """Returns feedback for the authenticated business owner."""
+    serializer_class = FeedbackSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        try:
+            return Feedback.objects.filter(owner=self.request.user)
+        except Exception as e:
+            raise ValidationError({"error": f"Error retrieving feedback: {str(e)}"})
+
+
+from django.contrib.auth import get_user_model
+
+from django.contrib.auth import get_user_model
+from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import ValidationError
+
+class CreateFeedbackView(generics.CreateAPIView):
+    """Allows anyone to submit feedback for a business owner."""
+    serializer_class = FeedbackSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def perform_create(self, serializer):
+        owner_id = self.request.data.get("owner")
+
+        if not owner_id:
+            raise ValidationError({"error": "Owner ID is required in the request body."})
+
+        # Get the actual User model
+        User = get_user_model()
+
+        # Fetch the user properly
+        owner = get_object_or_404(User, id=owner_id)
+
+        # Save feedback with the owner
+        serializer.save(owner=owner)
+
+    def create(self, request, *args, **kwargs):
+        """
+        Overrides the default create method to return a custom response.
+        """
+        response = super().create(request, *args, **kwargs)
+        return Response(
+            {"message": "Feedback submitted successfully!", "data": response.data},
+            status=status.HTTP_201_CREATED
+        )
+
+
+
+class DeleteFeedbackView(generics.DestroyAPIView):
+    """Allows a business owner to delete their own feedback."""
+    serializer_class = FeedbackSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Feedback.objects.filter(owner=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        feedback = self.get_object()
+        if feedback.owner != request.user:
+            raise PermissionDenied({"error": "You can only delete your own feedback"})
+
+        try:
+            feedback.delete()
+            return Response({"message": "Feedback deleted successfully"}, status=204)
+        except Exception as e:
+            raise ValidationError({"error": f"Error deleting feedback: {str(e)}"})

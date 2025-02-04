@@ -32,7 +32,6 @@ DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = ['sankhani.onrender.com']
 
-
 from decouple import config
 
 cloudinary.config(

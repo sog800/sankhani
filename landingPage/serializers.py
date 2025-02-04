@@ -1,7 +1,8 @@
 #landing page serializer
 
 from rest_framework import serializers
-from .models import LandingPage, LandingPageLink
+from .models import LandingPage, LandingPageLink, Feedback
+from django.conf import settings 
  
 class LandingPageSerializer(serializers.ModelSerializer):
     class Meta:
@@ -16,6 +17,8 @@ class LandingPageSerializer(serializers.ModelSerializer):
             "footer_email",
             "footer_phone",
             "footer_location",
+            "background_image",
+            "user",
         ]
         read_only_fields = ['id', 'user']
 
@@ -25,3 +28,10 @@ class LandingPageLinkSerializer(serializers.ModelSerializer):
         fields = ['email', 'landing_page_id']
         read_only_fields = ['email']
 
+# user feedback
+# Serializer
+class FeedbackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Feedback
+        fields = '__all__'
+        read_only_fields = ('owner', 'created_at')
