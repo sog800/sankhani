@@ -61,3 +61,32 @@ class Feedback(models.Model):
 
     def __str__(self):
         return f"Delete Account Feedback from {self.user.username} on {self.created_at}"
+
+
+# subscribcription
+
+from django.conf import settings
+from django.db import models
+from django.utils import timezone
+from datetime import timedelta
+
+class Subscriber(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    # Store the form data from the frontend:
+    payment_method = models.CharField(max_length=50, blank=True, null=True)
+    transaction_id = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Initially, subscribers are pending until confirmed by an admin.
+    is_confirmed = models.BooleanField(default=False)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def has_expired(self):
+        """Return True if the subscription is older than 32 days."""
+        return timezone.now() > self.created_at + timedelta(days=32)
+
+    def __str__(self):
+        status = "Confirmed" if self.is_confirmed else "Pending"
+        return f"{self.user.email} - {status}"

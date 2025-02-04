@@ -15,3 +15,19 @@ class FeedbackAdmin(admin.ModelAdmin):
 
 # Registering Feedback model with custom admin class
 admin.site.register(Feedback, FeedbackAdmin)
+
+# subcription
+from .models import Subscriber
+
+class SubscriberAdmin(admin.ModelAdmin):
+    list_display = ['user', 'payment_method', 'transaction_id', 'is_confirmed', 'created_at', 'updated_at']
+    list_filter = ['is_confirmed', 'created_at']
+    search_fields = ['user__email', 'payment_method', 'transaction_id']
+    actions = ['mark_as_confirmed']
+
+    def mark_as_confirmed(self, request, queryset):
+        updated = queryset.update(is_confirmed=True)
+        self.message_user(request, f"{updated} subscriber(s) marked as confirmed.")
+    mark_as_confirmed.short_description = "Mark selected subscribers as confirmed"
+
+admin.site.register(Subscriber, SubscriberAdmin)

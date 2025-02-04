@@ -21,6 +21,9 @@ from django.utils.decorators import method_decorator
 from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED, HTTP_500_INTERNAL_SERVER_ERROR
 from products.models import Product, LandingPage
 from busAccount.models import Feedback
+from django.utils import timezone
+from rest_framework.response import Response
+from rest_framework import status, permissions
 
 # Business profile views
 
@@ -209,3 +212,60 @@ class DeleteAccountView(APIView):
         user.delete()
 
         return JsonResponse({'message': 'Account and associated data deleted successfully'}, status=200)
+
+
+# subcription
+from .models import Subscriber
+
+class SubscriberCreateAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, format=None):
+        user = request.user
+
+        # Get form data from the request
+        payment_method = request.data.get('payment_method')
+        transaction_id = request.data.get('transaction_id')
+        try:
+            # Check if a subscription for this user already exists.
+            subscriber = Subscriber.objects.filter(user=user).first()
+            if subscriber:
+                if subscriber.has_expired():
+                    # Subscription expired; delete and create a new one.
+                    subscriber.delete()
+                    new_subscriber = Subscriber.objects.create(
+                        user=user,
+                        payment_method=payment_method,
+                        transaction_id=transaction_id
+                    )
+                    return Response(
+                        {"message": "Subscription request submitted, pending confirmation."},
+                        status=status.HTTP_201_CREATED
+                    )
+                else:
+                    # Subscription is active; renew it and update form data.
+                    subscriber.created_at = timezone.now()  # renew the subscription period
+                    subscriber.payment_method = payment_method
+                    subscriber.transaction_id = transaction_id
+                    subscriber.save()
+                    return Response(
+                        {"message": "Subscription renewed successfully, pending confirmation."},
+                        status=status.HTTP_200_OK
+                    )
+            else:
+                # Create a new subscription
+                Subscriber.objects.create(
+                    user=user,
+                    payment_method=payment_method,
+                    transaction_id=transaction_id
+                )
+                return Response(
+                    {"message": "Subscription request submitted, pending confirmation."},
+                    status=status.HTTP_201_CREATED
+                )
+        except Exception as e:
+            # Log the error in production and return a simple error message.
+            return Response(
+                {"error": f"An error occurred: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )

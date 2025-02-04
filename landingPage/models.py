@@ -2,7 +2,7 @@
 from django.conf import settings
 from django.db import models
 from cloudinary.models import CloudinaryField
-
+import cloudinary.uploader
 
 class LandingPage(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='landingPage', null=True, blank=True)

@@ -26,3 +26,18 @@ class UserBusinessProfileSerializer(serializers.ModelSerializer):
         model = UserBusinessProfile
         fields = ['id','is_business', 'business_name', 'phone_number', 'category', 'district', 'username', 'email']
         read_only_fields = ['user']
+
+
+
+# subscription
+
+from .models import Subscriber
+
+class SubscriberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subscriber
+        fields = [
+            'id', 'user', 'payment_method', 'transaction_id',
+            'is_confirmed', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['user', 'is_confirmed', 'created_at', 'updated_at']

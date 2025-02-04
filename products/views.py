@@ -11,14 +11,53 @@ from .models import Product
 from .serializers import ProductSerializer
 
 
+from rest_framework import serializers
+from busAccount.models import Subscriber  # Adjust the import if needed 
+
 class ProductCreateView(generics.ListCreateAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def perform_create(self, serializer):
-        # Get the current user details
         user = self.request.user
+
+        # Check if the user is subscribed (confirmed subscription)
+        # If the user has a confirmed subscription, they have unlimited product creation.
+        subscriber = Subscriber.objects.filter(user=user, is_confirmed=True).first()
+
+        if not subscriber:
+            print('you are not a subscriber')
+            # If not subscribed, check if the user has already reached 10 products.
+            product_count = Product.objects.filter(user=user).count()
+            if product_count >= 10:
+                raise serializers.ValidationError("You have reached the limit of 10 products. Please subscribe for unlimited product creation.")
+
+        # Check if an image was uploaded with the request.
+        product_picture = self.request.FILES.get('product_picture')
+        if product_picture:
+            # Optimize the image before saving.
+            optimized_image = optimize_image(product_picture)
+            serializer.save(
+                user=user,
+                email=user.email,
+                product_picture=optimized_image
+            )
+        else:
+            serializer.save(user=user, email=user.email)
+
+
+class PayedProductCreateView(generics.ListCreateAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def perform_create(self, serializer):
+        user = self.request.user
+
+        # Check if the user already has 6 products
+        if Product.objects.filter(user=user).count() >= 10:
+            raise serializers.ValidationError("Maximum range of posts reached")
 
         # Check if an image was uploaded with the request
         product_picture = self.request.FILES.get('product_picture')
@@ -32,8 +71,6 @@ class ProductCreateView(generics.ListCreateAPIView):
             )
         else:
             serializer.save(user=user, email=user.email)
-
-
 
 class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Product.objects.all()
